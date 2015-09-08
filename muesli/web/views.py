@@ -40,6 +40,8 @@ import os
 import datetime
 import traceback
 
+from icalendar import Calendar, Event, vCalAddress, vText, MEZ
+
 @view_config(route_name='start', renderer='muesli.web:templates/start.pt')
 def start(request):
 	if not request.user:
@@ -168,6 +170,48 @@ def changelog(request):
 		entries.append({'date': date, 'description': text})
 	return {'entries': entries}
 
+
+# What information to add:
+# busy mode for exams
+# tutorial, tutor name, Lecture name, locaton, lecture website, send-by, time zone, duration, alarm?, todo?, tutor-email, (Relationship Component Properties), Recurrence, is tutor him/herself, exam -> assistent , lecturer, exam-category, exam-url, tutorial-comment
+
+@view_config(route_name='icalendar', renderer='string')
+def icalendar(request):
+	if not request.user:
+		request.response.status=403
+	#	return HTTPFound(location = request.route_url('user_login'))
+	cal = Calendar()
+	cal.add('prodid', '-//MÜSLI - Mathematisches Übungsgruppen- und Scheinlisten-Interface//https://mathi.uni-heidelberg.de/muesli///')
+	cal.add('version', '2.0')
+
+        # Lecture information cannot be added, since lecture times are not handled within MÜSLI
+
+        # Get some information about the user
+	attendee = vCalAddress('MAILTO:' + request.user.email)
+	attendee.params['cn'] = vText(request.user.name)
+	attendee.params['ROLE'] = vText('REQ-PARTICIPANT')
+
+        # Begin with tutorials
+        for tutorial in request.user.all_tutorials.options(joinedload(Tutorial.tutor), joinedload(Tutorial.lecture)):
+	        event = Event()
+	        event.add('summary', 'Tutorium: ' + Tutorial.lecture.name)
+                # Oh Gosh! We need to parse this horrible time format to create a real date :(
+                # Actually not, this will be too error-prone
+                year = int(tutorial.lecture.term.value[0:4])
+	        event.add('dtstart', datetime(2005,4,4,8,0,0,tzinfo=pytz.utc)) # For these lines we need a new structure to hold Events in tutorials
+	        event.add('dtend', datetime(2005,4,4,10,0,0,tzinfo=pytz.utc)) # We also need a UI to enter event-details for the tutors
+	        event.add('dtstamp', datetime(2005,4,4,0,10,0,tzinfo=pytz.utc))
+	        organizer = vCalAddress('MAILTO:' + tutorial.tutor.email)
+	        organizer.params['cn'] = vText(tutorial.tutor.name)
+	        event['location'] = vText(tutorial.tutor.name)
+	        event['uid'] = '20050115T101010/27346262376@mxm.dk' # TODO
+	        #event.add('priority', 5)
+	        event.add('attendee', attendee, encode=0) # mark the user as attendee
+	        cal.add_component(event)
+
+        # Now exams
+        # TODO
+	return cal.to_ical()
 
 @view_config(context=pyramid.exceptions.HTTPForbidden, renderer='muesli.web:templates/forbidden.pt')
 def forbidden(exc, request):

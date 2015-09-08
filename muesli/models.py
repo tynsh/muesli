@@ -112,6 +112,9 @@ class User(Base):
 			else:
 				mt[tutorial.lecture.id] = [tutorial]
 		return mt
+        def all_tutorials(self):
+		session = Session.object_session(self)
+		return session.query(Tutorial).filter((Tutorial.tutor_id == self.id) | (Tutorial.lecture_students.any(LectureStudent.student_id == self.id))).join(Tutorial.lecture).order_by(Lecture.term)
 	def name(self):
 		return self.first_name + ' ' + self.last_name
 	def prepareTimePreferences(self):
